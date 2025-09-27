@@ -219,7 +219,7 @@ const SITE_DEFINITIONS = {
 };
 
 // ===== DETECÇÃO AUTOMÁTICA DE SITES =====
-const currentURL = window.location.href;
+const currentURL = globalThis.location.href;
 let currentSiteInfo = null;
 
 for (const [siteName, siteData] of Object.entries(SITE_DEFINITIONS)) {
@@ -240,7 +240,7 @@ function getCurrentSite() {
 function sanitizeString(str) {
     if (typeof str !== 'string') return '';
     // Remove caracteres perigosos e limita tamanho
-    return str.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').substring(0, 255);
+    return str.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').substring(0, 255);
 }
 
 function generateSimpleChecksum(dataArray) {
@@ -280,7 +280,7 @@ function needsPopupCleanup(site) {
 
 // Função de segurança para validar se estamos em um site MTR oficial
 function isValidMTRSite() {
-    const currentHost = window.location.hostname;
+    const currentHost = globalThis.location.hostname;
     const validMTRHosts = [
         'mtr.cetesb.sp.gov.br',
         'mtr.fepam.rs.gov.br',
@@ -308,16 +308,16 @@ function handlePopupCleanup(site) {
         return;
     }
 
-    if (window.location.href.includes('msgSalva=')) {
+    if (globalThis.location.href.includes('msgSalva=')) {
         console.log(`🔧 ${site}: Detectado parâmetro msgSalva na URL inicial, removendo...`);
 
-        // Usar history.replaceState em vez de window.location.href para evitar redirecionamento
+        // Usar history.replaceState em vez de globalThis.location.href para evitar redirecionamento
         try {
-            const url = new URL(window.location.href);
+            const url = new URL(globalThis.location.href);
             url.searchParams.delete('msgSalva');
 
             // Método seguro: usar history API em vez de redirecionamento
-            window.history.replaceState({}, document.title, url.toString());
+            globalThis.history.replaceState({}, document.title, url.toString());
             console.log('✅ Parâmetro msgSalva removido com segurança da URL');
         } catch (error) {
             console.error('❌ Erro ao remover parâmetro msgSalva:', error);
@@ -366,9 +366,9 @@ function setupUrlObserver(site) {
                 setTimeout(() => {
                     try {
                         // Usar history API em vez de redirecionamento direto
-                        const url = new URL(window.location.href);
+                        const url = new URL(globalThis.location.href);
                         url.searchParams.delete('msgSalva');
-                        window.history.replaceState({}, document.title, url.toString());
+                        globalThis.history.replaceState({}, document.title, url.toString());
                         console.log('✅ Parâmetro msgSalva removido com segurança via observer');
                     } catch (error) {
                         console.error('❌ Erro no observer ao remover msgSalva:', error);
@@ -490,7 +490,7 @@ function findAddUserButton() {
             let button = null;
 
             if (selector.includes(':contains(')) {
-                const text = selector.match(/:contains\(\"([^\"]+)\"\)/)?.[1];
+                const text = selector.match(/:contains\("([^"]+)"\)/)?.[1];
                 if (text) {
                     button = Array.from(document.querySelectorAll('button, a')).find(btn => btn.textContent.includes(text));
                 }
@@ -658,11 +658,11 @@ async function closeSuccessPopup() {
         console.log(`🔧 ${currentSite.toUpperCase()}: Aguardando página estabilizar...`);
         await sleep(2000);
 
-        if (window.location.href.includes('msgSalva=')) {
+        if (globalThis.location.href.includes('msgSalva=')) {
             console.log('🔧 Removendo parâmetro msgSalva da URL para fechar popup');
-            const url = new URL(window.location.href);
+            const url = new URL(globalThis.location.href);
             url.searchParams.delete('msgSalva');
-            window.history.replaceState({}, document.title, url.toString());
+            globalThis.history.replaceState({}, document.title, url.toString());
             console.log('✅ Popup fechado via remoção de parâmetro URL');
             await sleep(1000);
             return true;
@@ -790,7 +790,7 @@ function findSubmitButtonBySite(currentSite) {
         let button = null;
 
         if (selector.includes(':contains(')) {
-            const text = selector.match(/:contains\(\"([^\"]+)\"\)/)?.[1];
+            const text = selector.match(/:contains\("([^"]+)"\)/)?.[1];
             if (text) {
                 button = Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes(text));
             }
@@ -856,7 +856,7 @@ async function fillAndSubmitForm(formData, recordNumber) {
 }
 
 // ===== FUNÇÕES EXPOSTAS GLOBALMENTE =====
-window.getUploadedFileData = () => uploadedFileData;
-window.getExcelData = () => excelData;
-window.pauseFillForms = () => fillFormsPaused = true;
-window.resumeFillForms = () => fillFormsPaused = false;
+globalThis.getUploadedFileData = () => uploadedFileData;
+globalThis.getExcelData = () => excelData;
+globalThis.pauseFillForms = () => fillFormsPaused = true;
+globalThis.resumeFillForms = () => fillFormsPaused = false;
