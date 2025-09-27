@@ -240,7 +240,7 @@ function getCurrentSite() {
 function sanitizeString(str) {
     if (typeof str !== 'string') return '';
     // Remove caracteres perigosos e limita tamanho
-    return str.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').substring(0, 255);
+    return str.replaceAll(/[<>:"/\\|?*\u0000-\u001f]/g, '_').substring(0, 255);
 }
 
 function generateSimpleChecksum(dataArray) {
@@ -264,7 +264,7 @@ function isValidFormData(data) {
     }
 
     // Validar CPF básico (apenas números e tamanho)
-    const cpfNumbers = data.cpf.replace(/\D/g, '');
+    const cpfNumbers = data.cpf.replaceAll(/\D/g, '');
     if (cpfNumbers.length !== 11) return false;
 
     // Validar email básico
@@ -751,7 +751,7 @@ function fillField(field, value, fieldName) {
         field.value = value;
 
         if (fieldName === 'cpf' && field.hasAttribute('mask')) {
-            const cpfNumbers = value.replace(/\D/g, '');
+            const cpfNumbers = value.replaceAll(/\D/g, '');
             field.value = '';
             for (let i = 0; i < cpfNumbers.length; i++) {
                 field.value += cpfNumbers[i];

@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function sanitizeFileName(fileName) {
         // Remove caracteres perigosos do nome do arquivo
-        return fileName.replace(/[<>:"/\\|?*]/g, '_').substring(0, 255);
+        return fileName.replaceAll(/[<>:"/\\|?*]/g, '_').substring(0, 255);
     }
 
     function sanitizeArrayBuffer(buffer) {
