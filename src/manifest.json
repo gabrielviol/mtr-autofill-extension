@@ -1,0 +1,45 @@
+{
+    "manifest_version": 3,
+    "name": "MTR Auto Fill - Cadastro Automático",
+    "version": "1.0.0",
+    "description": "Extensão oficial para automatização de cadastros em sistemas MTR brasileiros. Processa arquivos Excel (.xlsx/.xls) de forma segura para preenchimento automático de formulários de usuários em portais governamentais.",
+    "permissions": [
+        "activeTab",
+        "storage"
+    ],
+    "host_permissions": [
+        "*://mtr.cetesb.sp.gov.br/*",
+        "*://mtr.fepam.rs.gov.br/*",
+        "*://mtr.ima.sc.gov.br/*",
+        "*://mtr.sinir.gov.br/*",
+        "*://mtr.inea.rj.gov.br/*",
+        "*://mtr.meioambiente.mg.gov.br/*",
+        "*://mtr.iema.es.gov.br/*"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://mtr.cetesb.sp.gov.br/*",
+                "*://mtr.fepam.rs.gov.br/*",
+                "*://mtr.ima.sc.gov.br/*",
+                "*://mtr.sinir.gov.br/*",
+                "*://mtr.inea.rj.gov.br/*",
+                "*://mtr.meioambiente.mg.gov.br/*",
+                "*://mtr.iema.es.gov.br/*"
+            ],
+            "js": [
+                "xlsx.js",
+                "content.js"
+            ]
+        }
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_title": "MTR Auto Fill"
+    },
+    "author": "Gabriel",
+    "homepage_url": "https://github.com/gabriel/mtr-extension"
+}
