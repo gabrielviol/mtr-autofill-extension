@@ -529,6 +529,82 @@ async function fillFormsWithExcelData() {
     await continueProcessingFromIndex(0);
 }
 
+// Função auxiliar para aguardar durante pausa
+async function waitForResumeOrStop() {
+    let pauseWaitTime = 0;
+    const maxPauseWaitTime = 120000; // 2 minutos
+
+    while (fillFormsPaused && !fillFormsStopped && pauseWaitTime < maxPauseWaitTime) {
+        await sleep(500);
+        pauseWaitTime += 500;
+
+        // Verificação de dados perdidos
+        if (!excelData || excelData.length === 0) {
+            console.warn('⚠️ Dados perdidos durante pausa - parando processamento');
+            fillFormsStopped = true;
+            break;
+        }
+
+        // Log de debug
+        if (pauseWaitTime % 10000 === 0) {
+            console.log(`⏸️ Processamento pausado há ${pauseWaitTime / 1000} segundos...`);
+        }
+    }
+
+    // Timeout check
+    if (pauseWaitTime >= maxPauseWaitTime) {
+        console.warn('⚠️ Timeout aguardando retomada - parando processamento');
+        fillFormsStopped = true;
+    }
+}
+
+// Função auxiliar para verificar se deve parar o processamento
+function shouldStopProcessing() {
+    if (fillFormsStopped) {
+        const currentSite = getCurrentSite();
+        if (needsPopupCleanup(currentSite)) {
+            localStorage.removeItem(`${currentSite}_cadastro_state`);
+        }
+        console.log('🛑 Processamento interrompido pelo usuário ou timeout');
+        return true;
+    }
+    return false;
+}
+
+// Função auxiliar para salvar estado atual
+function saveCurrentState(index) {
+    const currentSite = getCurrentSite();
+    if (needsPopupCleanup(currentSite)) {
+        const state = {
+            excelData,
+            uploadedFileData,
+            currentIndex: index
+        };
+        localStorage.setItem(`${currentSite}_cadastro_state`, JSON.stringify(state));
+    }
+}
+
+// Função auxiliar para preparar próximo formulário
+async function prepareNextForm(isLastRecord) {
+    if (!isLastRecord) {
+        await sleep(1000);
+        const addUserButton = findAddUserButton();
+        if (addUserButton) {
+            clickButton(addUserButton);
+            await sleep(1000);
+        } else {
+            console.error('❌ BOTÃO ADICIONAR USUÁRIO NÃO ENCONTRADO!');
+        }
+    } else {
+        // Último registro - limpar estado
+        const currentSite = getCurrentSite();
+        if (needsPopupCleanup(currentSite)) {
+            localStorage.removeItem(`${currentSite}_cadastro_state`);
+        }
+    }
+}
+
+// Função principal refatorada
 async function continueProcessingFromIndex(startIndex) {
     if (!excelData || excelData.length === 0) return;
 
@@ -536,82 +612,27 @@ async function continueProcessingFromIndex(startIndex) {
     fillFormsPaused = false;
 
     for (let i = startIndex; i < excelData.length; i++) {
-        // Proteção contra loop infinito - máximo 2 minutos aguardando
-        let pauseWaitTime = 0;
-        const maxPauseWaitTime = 120000; // 2 minutos
+        await waitForResumeOrStop();
 
-        while (fillFormsPaused && !fillFormsStopped && pauseWaitTime < maxPauseWaitTime) {
-            await sleep(500);
-            pauseWaitTime += 500;
-
-            // Verificação adicional: se a página mudou ou a extensão foi recarregada
-            if (!excelData || excelData.length === 0) {
-                console.warn('⚠️ Dados perdidos durante pausa - parando processamento');
-                fillFormsStopped = true;
-                break;
-            }
-
-            // Log de debug para mostrar que está aguardando
-            if (pauseWaitTime % 10000 === 0) { // A cada 10 segundos
-                console.log(`⏸️ Processamento pausado há ${pauseWaitTime / 1000} segundos...`);
-            }
-        }
-
-        // Se ultrapassou o tempo limite, considerar como stop
-        if (pauseWaitTime >= maxPauseWaitTime) {
-            console.warn('⚠️ Timeout aguardando retomada - parando processamento');
-            fillFormsStopped = true;
-        }
-
-        if (fillFormsStopped) {
-            const currentSite = getCurrentSite();
-            if (needsPopupCleanup(currentSite)) {
-                localStorage.removeItem(`${currentSite}_cadastro_state`);
-            }
-            console.log('🛑 Processamento interrompido pelo usuário ou timeout');
+        if (shouldStopProcessing()) {
             break;
         }
 
         const record = excelData[i];
 
         try {
-            // Salvar estado atual no localStorage para sites com popup cleanup
-            const currentSite = getCurrentSite();
-            if (needsPopupCleanup(currentSite)) {
-                const state = {
-                    excelData,
-                    uploadedFileData,
-                    currentIndex: i
-                };
-                localStorage.setItem(`${currentSite}_cadastro_state`, JSON.stringify(state));
-            }
+            saveCurrentState(i);
 
             const formData = mapExcelToFormFields(record);
 
-            // Validar dados do formulário antes de preencher
             if (!isValidFormData(formData)) {
                 console.error(`❌ Dados inválidos no registro ${i + 1}:`, formData);
-                continue; // Pular este registro
+                continue;
             }
 
             await fillAndSubmitForm(formData, i + 1);
+            await prepareNextForm(i === excelData.length - 1);
 
-            // Reabrir modal apenas se NÃO for o último registro
-            if (i < excelData.length - 1) {
-                await sleep(1000);
-                const addUserButton = findAddUserButton();
-                if (addUserButton) {
-                    clickButton(addUserButton);
-                    await sleep(1000);
-                } else {
-                    console.error('❌ BOTÃO ADICIONAR USUÁRIO NÃO ENCONTRADO!');
-                }
-            } else {
-                // Último registro - limpar estado
-                if (needsPopupCleanup(currentSite)) {
-                    localStorage.removeItem(`${currentSite}_cadastro_state`);
-                }
-            }
         } catch (error) {
             console.error(`❌ ERRO no registro ${i + 1}:`, error);
         }
@@ -737,7 +758,8 @@ function fillField(field, value, fieldName) {
     });
 }
 
-async function fillAndSubmitForm(formData, recordNumber) {
+// Função auxiliar para preencher todos os campos do formulário
+function fillFormFields(formData) {
     Object.keys(formData).forEach(fieldName => {
         const value = formData[fieldName];
         const field = findField(fieldName);
@@ -748,27 +770,39 @@ async function fillAndSubmitForm(formData, recordNumber) {
             console.warn(`⚠️ Campo ${fieldName} NÃO encontrado!`);
         }
     });
+}
 
-    await sleep(1000);
+// Função auxiliar para encontrar botão submit com seletores específicos do site
+function findSubmitButtonBySite(currentSite) {
+    if (!currentSite || !siteConfigs[currentSite] || !siteConfigs[currentSite].submitButton) {
+        return null;
+    }
 
+    const selectors = siteConfigs[currentSite].submitButton;
+    for (const selector of selectors) {
+        let button = null;
+
+        if (selector.includes(':contains(')) {
+            const text = selector.match(/:contains\(\"([^\"]+)\"\)/)?.[1];
+            if (text) {
+                button = Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes(text));
+            }
+        } else {
+            button = document.querySelector(selector);
+        }
+
+        if (button) return button;
+    }
+
+    return null;
+}
+
+// Função auxiliar para encontrar botão submit com fallback
+function findSubmitButton() {
     const currentSite = getCurrentSite();
-    let submitButton = null;
 
     // Tentar seletores específicos do site primeiro
-    if (currentSite && siteConfigs[currentSite] && siteConfigs[currentSite].submitButton) {
-        const selectors = siteConfigs[currentSite].submitButton;
-        for (const selector of selectors) {
-            if (selector.includes(':contains(')) {
-                const text = selector.match(/:contains\(\"([^\"]+)\"\)/)?.[1];
-                if (text) {
-                    submitButton = Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes(text));
-                }
-            } else {
-                submitButton = document.querySelector(selector);
-            }
-            if (submitButton) break;
-        }
-    }
+    let submitButton = findSubmitButtonBySite(currentSite);
 
     // Fallback para método original
     if (!submitButton) {
@@ -776,26 +810,41 @@ async function fillAndSubmitForm(formData, recordNumber) {
             document.querySelector('button.btn.mat-raised-button.mat-primary');
     }
 
-    if (submitButton) {
-        try {
-            if (submitButton.disabled) {
-                await sleep(500);
-            }
+    return submitButton;
+}
 
-            clickButton(submitButton);
-
-            // Aguardar modal fechar completamente
-            await sleep(2000);
-
-            await closeSuccessPopup();
-
+// Função auxiliar para executar submissão do formulário
+async function executeFormSubmission(submitButton) {
+    try {
+        if (submitButton.disabled) {
             await sleep(500);
-
-        } catch (clickError) {
-            console.error('❌ ERRO ao clicar SALVAR:', clickError);
         }
+
+        clickButton(submitButton);
+        await sleep(2000); // Aguardar modal fechar
+        await closeSuccessPopup();
+        await sleep(500);
+
+    } catch (clickError) {
+        console.error('❌ ERRO ao clicar SALVAR:', clickError);
+        throw clickError;
+    }
+}
+
+// Função principal refatorada
+async function fillAndSubmitForm(formData, recordNumber) {
+    // Preencher campos do formulário
+    fillFormFields(formData);
+    await sleep(1000);
+
+    // Encontrar botão de submissão
+    const submitButton = findSubmitButton();
+
+    if (submitButton) {
+        await executeFormSubmission(submitButton);
     } else {
         console.error('❌ BOTÃO SALVAR NÃO ENCONTRADO!');
+        throw new Error('Botão Salvar não encontrado');
     }
 }
 
