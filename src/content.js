@@ -278,6 +278,22 @@ function needsPopupCleanup(site) {
     return SITE_DEFINITIONS[site]?.hasPopupCleanup || false;
 }
 
+// Função de segurança para validar se estamos em um site MTR oficial
+function isValidMTRSite() {
+    const currentHost = window.location.hostname;
+    const validMTRHosts = [
+        'mtr.cetesb.sp.gov.br',
+        'mtr.fepam.rs.gov.br',
+        'mtr.ima.sc.gov.br',
+        'mtr.sinir.gov.br',
+        'mtr.inea.rj.gov.br',
+        'mtr.meioambiente.mg.gov.br',
+        'mtr.iema.es.gov.br'
+    ];
+
+    return validMTRHosts.includes(currentHost);
+}
+
 // Extrair configurações para compatibilidade
 const siteConfigs = {};
 Object.entries(SITE_DEFINITIONS).forEach(([name, data]) => {
@@ -286,11 +302,26 @@ Object.entries(SITE_DEFINITIONS).forEach(([name, data]) => {
 
 // ===== GESTÃO DE POPUP PARA SITES COM msgSalva =====
 function handlePopupCleanup(site) {
+    // Validar se o site é confiável antes de qualquer operação
+    if (!isValidMTRSite()) {
+        console.warn('🔒 Site não reconhecido como MTR oficial - operação cancelada');
+        return;
+    }
+
     if (window.location.href.includes('msgSalva=')) {
         console.log(`🔧 ${site}: Detectado parâmetro msgSalva na URL inicial, removendo...`);
-        const url = new URL(window.location.href);
-        url.searchParams.delete('msgSalva');
-        window.location.href = url.toString();
+
+        // Usar history.replaceState em vez de window.location.href para evitar redirecionamento
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('msgSalva');
+
+            // Método seguro: usar history API em vez de redirecionamento
+            window.history.replaceState({}, document.title, url.toString());
+            console.log('✅ Parâmetro msgSalva removido com segurança da URL');
+        } catch (error) {
+            console.error('❌ Erro ao remover parâmetro msgSalva:', error);
+        }
         return;
     }
 
@@ -319,6 +350,12 @@ if (currentSiteInfo && currentSiteInfo.hasPopupCleanup) {
 
 // ===== OBSERVERS PARA MUDANÇAS DE URL =====
 function setupUrlObserver(site) {
+    // Validar se o site é confiável
+    if (!isValidMTRSite()) {
+        console.warn('🔒 Observer não configurado - site não reconhecido como MTR oficial');
+        return;
+    }
+
     let lastUrl = location.href;
     new MutationObserver(() => {
         const currentUrl = location.href;
@@ -327,9 +364,15 @@ function setupUrlObserver(site) {
             if (currentUrl.includes('msgSalva=')) {
                 console.log(`🔧 ${site}: URL mudou com msgSalva, removendo...`);
                 setTimeout(() => {
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('msgSalva');
-                    window.location.href = url.toString();
+                    try {
+                        // Usar history API em vez de redirecionamento direto
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('msgSalva');
+                        window.history.replaceState({}, document.title, url.toString());
+                        console.log('✅ Parâmetro msgSalva removido com segurança via observer');
+                    } catch (error) {
+                        console.error('❌ Erro no observer ao remover msgSalva:', error);
+                    }
                 }, 500);
             }
         }
@@ -493,8 +536,31 @@ async function continueProcessingFromIndex(startIndex) {
     fillFormsPaused = false;
 
     for (let i = startIndex; i < excelData.length; i++) {
-        while (fillFormsPaused && !fillFormsStopped) {
+        // Proteção contra loop infinito - máximo 2 minutos aguardando
+        let pauseWaitTime = 0;
+        const maxPauseWaitTime = 120000; // 2 minutos
+
+        while (fillFormsPaused && !fillFormsStopped && pauseWaitTime < maxPauseWaitTime) {
             await sleep(500);
+            pauseWaitTime += 500;
+
+            // Verificação adicional: se a página mudou ou a extensão foi recarregada
+            if (!excelData || excelData.length === 0) {
+                console.warn('⚠️ Dados perdidos durante pausa - parando processamento');
+                fillFormsStopped = true;
+                break;
+            }
+
+            // Log de debug para mostrar que está aguardando
+            if (pauseWaitTime % 10000 === 0) { // A cada 10 segundos
+                console.log(`⏸️ Processamento pausado há ${pauseWaitTime / 1000} segundos...`);
+            }
+        }
+
+        // Se ultrapassou o tempo limite, considerar como stop
+        if (pauseWaitTime >= maxPauseWaitTime) {
+            console.warn('⚠️ Timeout aguardando retomada - parando processamento');
+            fillFormsStopped = true;
         }
 
         if (fillFormsStopped) {
@@ -502,6 +568,7 @@ async function continueProcessingFromIndex(startIndex) {
             if (needsPopupCleanup(currentSite)) {
                 localStorage.removeItem(`${currentSite}_cadastro_state`);
             }
+            console.log('🛑 Processamento interrompido pelo usuário ou timeout');
             break;
         }
 
