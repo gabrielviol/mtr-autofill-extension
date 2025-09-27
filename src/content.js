@@ -533,10 +533,14 @@ async function fillFormsWithExcelData() {
 async function waitForResumeOrStop() {
     let pauseWaitTime = 0;
     const maxPauseWaitTime = 120000; // 2 minutos
+    const checkInterval = 500;
 
-    while (fillFormsPaused && !fillFormsStopped && pauseWaitTime < maxPauseWaitTime) {
-        await sleep(500);
-        pauseWaitTime += 500;
+    // Loop com condição de saída garantida baseada em tempo
+    while (pauseWaitTime < maxPauseWaitTime) {
+        // Verificar condições de parada primeiro
+        if (!fillFormsPaused || fillFormsStopped) {
+            break; // Sair se não estiver pausado ou se foi parado
+        }
 
         // Verificação de dados perdidos
         if (!excelData || excelData.length === 0) {
@@ -545,14 +549,17 @@ async function waitForResumeOrStop() {
             break;
         }
 
+        await sleep(checkInterval);
+        pauseWaitTime += checkInterval;
+
         // Log de debug
         if (pauseWaitTime % 10000 === 0) {
             console.log(`⏸️ Processamento pausado há ${pauseWaitTime / 1000} segundos...`);
         }
     }
 
-    // Timeout check
-    if (pauseWaitTime >= maxPauseWaitTime) {
+    // Timeout check - se chegou ao limite de tempo
+    if (pauseWaitTime >= maxPauseWaitTime && fillFormsPaused) {
         console.warn('⚠️ Timeout aguardando retomada - parando processamento');
         fillFormsStopped = true;
     }
