@@ -443,11 +443,16 @@ async function handleFileProcessAndClick(request) {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             excelData = XLSX.utils.sheet_to_json(worksheet);
+
+            // Validar se conseguiu extrair dados
+            if (!excelData || excelData.length === 0) {
+                throw new Error('Arquivo Excel vazio ou sem dados válidos');
+            }
+
+            console.log(`✅ Excel processado com sucesso: ${excelData.length} registros encontrados`);
         } catch (error) {
-            excelData = [
-                { cpf: '12345678901', name: 'João Silva', cargo: 'Desenvolvedor', email: 'joao@email.com' },
-                { cpf: '98765432109', name: 'Maria Santos', cargo: 'Analista', email: 'maria@email.com' }
-            ];
+            console.error('❌ Erro ao processar arquivo Excel:', error);
+            throw new Error(`Falha ao processar arquivo Excel: ${error.message}`);
         }
 
         const button = findAddUserButton();

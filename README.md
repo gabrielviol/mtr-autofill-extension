@@ -57,6 +57,8 @@ A **MTR AutoFill Extension** automatiza o preenchimento de formulários de usuá
 
 🔜 Em breve disponível na Chrome Web Store
 
+**Para desenvolvedores**: Veja [PUBLISHING_GUIDE.md](./PUBLISHING_GUIDE.md) para instruções completas de como publicar na Chrome Web Store.
+
 ## 📖 Como Usar
 
 ### 1. Prepare sua planilha Excel
