@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "MTR Auto Fill - Cadastro Automático",
     "version": "1.0.0",
-    "description": "Extensão oficial para automatização de cadastros em sistemas MTR brasileiros. Processa arquivos Excel (.xlsx/.xls) de forma segura para preenchimento automático de formulários de usuários em portais governamentais.",
+    "description": "Automatize cadastros em sistemas MTR brasileiros com upload de Excel. Suporte a CETESB, FEPAM, IMA, SINIR e mais.",
     "permissions": [
         "activeTab",
         "storage"
