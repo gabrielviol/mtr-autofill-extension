@@ -208,7 +208,8 @@ const SITE_DEFINITIONS = {
                 cargo: ['input[formcontrolname="paaCargo"]', 'input[placeholder="Cargo"]', 'input[aria-label="Cargo"]'],
                 email: ['input[formcontrolname="paaEmail"]', 'input[placeholder="Email"]'],
                 senha: ['input[formcontrolname="paaSenha"]', 'input[type="password"]:first-of-type'],
-                confirmaSenha: ['input[formcontrolname="paaConfirmaSenha"]', 'input[type="password"]:last-of-type']
+                confirmaSenha: ['input[formcontrolname="paaConfirmaSenha"]', 'input[type="password"]:last-of-type'],
+                celular: ['input[formcontrolname="paaCelular"]', 'input[placeholder="Celular"]']
             },
             submitButton: [
                 'button:contains("Salvar")',
@@ -223,6 +224,7 @@ const currentURL = globalThis.location.href;
 let currentSiteInfo = null;
 
 for (const [siteName, siteData] of Object.entries(SITE_DEFINITIONS)) {
+    console.log(siteName, siteData.url);
     if (currentURL.includes(siteData.url)) {
         currentSiteInfo = { name: siteName, ...siteData };
         break;
@@ -263,6 +265,16 @@ function isValidFormData(data) {
         }
     }
 
+    if(SITE_DEFINITIONS[getCurrentSite()].name === 'sinir') {
+        if(!data.celular || typeof data.celular !== 'string') {
+            return false
+        }
+        const celularNumbers = data.celular.replaceAll(/\D/g, '');
+        if(celularNumbers.length !== 11) {
+            return false;
+        }
+        data.celular = celularNumbers;
+    }
     // Validar CPF básico (apenas números e tamanho)
     const cpfNumbers = data.cpf.replaceAll(/\D/g, '');
     if (cpfNumbers.length !== 11) return false;
@@ -309,16 +321,17 @@ function handlePopupCleanup(site) {
     }
 
     if (globalThis.location.href.includes('msgSalva=')) {
-        console.log(`🔧 ${site}: Detectado parâmetro msgSalva na URL inicial, removendo...`);
+        console.log(`🔧 ${site}: Detectado parâmetro msgSalva na URL - aguardando 2s antes de recarregar...`);
 
-        // Usar history.replaceState em vez de globalThis.location.href para evitar redirecionamento
         try {
             const url = new URL(globalThis.location.href);
             url.searchParams.delete('msgSalva');
 
-            // Método seguro: usar history API em vez de redirecionamento
-            globalThis.history.replaceState({}, document.title, url.toString());
-            console.log('✅ Parâmetro msgSalva removido com segurança da URL');
+            // Aguardar 2 segundos para garantir que o registro foi salvo completamente
+            setTimeout(() => {
+                console.log('🔄 Recarregando página para fechar modal...');
+                globalThis.location.href = url.toString();
+            }, 2000);
         } catch (error) {
             console.error('❌ Erro ao remover parâmetro msgSalva:', error);
         }
@@ -362,18 +375,18 @@ function setupUrlObserver(site) {
         if (currentUrl !== lastUrl) {
             lastUrl = currentUrl;
             if (currentUrl.includes('msgSalva=')) {
-                console.log(`🔧 ${site}: URL mudou com msgSalva, removendo...`);
+                console.log(`🔧 ${site}: URL mudou com msgSalva - aguardando 2s antes de recarregar...`);
                 setTimeout(() => {
                     try {
-                        // Usar history API em vez de redirecionamento direto
                         const url = new URL(globalThis.location.href);
                         url.searchParams.delete('msgSalva');
-                        globalThis.history.replaceState({}, document.title, url.toString());
-                        console.log('✅ Parâmetro msgSalva removido com segurança via observer');
+                        // Fazer reload completo para fechar a modal
+                        console.log('🔄 Recarregando página via observer...');
+                        globalThis.location.href = url.toString();
                     } catch (error) {
                         console.error('❌ Erro no observer ao remover msgSalva:', error);
                     }
-                }, 500);
+                }, 2000);
             }
         }
     }).observe(document, { subtree: true, childList: true });
@@ -638,6 +651,7 @@ async function continueProcessingFromIndex(startIndex) {
             const formData = mapExcelToFormFields(record);
 
             if (!isValidFormData(formData)) {
+                console.log('Dados inválidos no registro ${i + 1}:', formData);
                 console.error(`❌ Dados inválidos no registro ${i + 1}:`, formData);
                 continue;
             }
@@ -658,23 +672,15 @@ async function closeSuccessPopup() {
         return false;
     }
 
-    // Para sites com popup cleanup, aguardar mais tempo pois a página pode estar recarregando
+    // Para sites com popup cleanup (IMA, FEPAM, etc), a página vai recarregar automaticamente
+    // quando detectar msgSalva= na URL. Apenas aguardamos um pouco para dar tempo do reload acontecer.
     if (needsPopupCleanup(currentSite)) {
-        console.log(`🔧 ${currentSite.toUpperCase()}: Aguardando página estabilizar...`);
-        await sleep(2000);
-
-        if (globalThis.location.href.includes('msgSalva=')) {
-            console.log('🔧 Removendo parâmetro msgSalva da URL para fechar popup');
-            const url = new URL(globalThis.location.href);
-            url.searchParams.delete('msgSalva');
-            globalThis.history.replaceState({}, document.title, url.toString());
-            console.log('✅ Popup fechado via remoção de parâmetro URL');
-            await sleep(1000);
-            return true;
-        }
+        console.log(`🔧 ${currentSite.toUpperCase()}: Modal será fechada automaticamente pelo reload da página`);
+        await sleep(1000);
+        return true;
     }
 
-    // Fallback para outros métodos
+    // Para sites sem popup cleanup (CETESB, SINIR), tentar fechar modal com seletores
     const config = siteConfigs[currentSite].closeSuccessPopup;
     await sleep(500);
 
@@ -833,7 +839,9 @@ async function executeFormSubmission(submitButton) {
         }
 
         clickButton(submitButton);
-        await sleep(2000); // Aguardar modal fechar
+        console.log('Aguardando 5 segundos para modal fechar');
+        await sleep(5000); // Aguardar modal fechar
+        console.log('Fechando popup');
         await closeSuccessPopup();
         await sleep(500);
 
